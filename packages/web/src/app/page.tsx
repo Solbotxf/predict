@@ -1,60 +1,88 @@
 import { Hero } from '@/components/landing/Hero'
+import { PipelineFlow } from '@/components/landing/PipelineFlow'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { ModuleShowcase } from '@/components/landing/ModuleShowcase'
 import Link from 'next/link'
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
+      {/* Subtle scanline overlay for tech feel */}
+      <div className="scanline-overlay" />
+
       {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 border-b border-[var(--border-glass)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="fixed top-0 w-full z-50 border-b border-[var(--border-glass)]" style={{ background: 'rgba(6, 7, 16, 0.85)', backdropFilter: 'blur(12px)' }}>
+        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-accent)] flex items-center justify-center text-white font-bold text-sm">
-              PM
+            <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-[10px]"
+              style={{ background: 'linear-gradient(135deg, var(--brand-primary), var(--brand-accent))' }}>
+              PE
             </div>
-            <span className="font-display font-bold text-lg">PredictEdge</span>
+            <span className="font-display font-bold text-sm tracking-wide">PREDICT<span style={{ color: 'var(--brand-accent)' }}>EDGE</span></span>
           </Link>
-          <div className="hidden md:flex items-center gap-8 text-sm text-[var(--text-secondary)]">
-            <Link href="#modules" className="hover:text-white transition-colors">Products</Link>
-            <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-            <Link href="/app" className="hover:text-white transition-colors">Dashboard</Link>
+          <div className="hidden md:flex items-center gap-6 text-xs font-mono text-[var(--text-secondary)] uppercase tracking-wider">
+            <Link href="#pipeline" className="hover:text-[var(--brand-accent)] transition-colors">Pipeline</Link>
+            <Link href="#modules" className="hover:text-[var(--brand-accent)] transition-colors">Modules</Link>
+            <Link href="/pricing" className="hover:text-[var(--brand-accent)] transition-colors">Pricing</Link>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/app" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">Log in</Link>
-            <Link href="/app" className="text-sm bg-[var(--brand-primary)] text-white px-4 py-2 rounded-lg hover:brightness-110 transition-all">
-              Sign Up
+            <Link href="/app" className="text-xs font-mono text-[var(--text-secondary)] hover:text-white transition-colors uppercase tracking-wider">Log in</Link>
+            <Link href="/app" className="text-xs font-mono text-white px-4 py-2 rounded-md transition-all uppercase tracking-wider"
+              style={{ background: 'linear-gradient(135deg, var(--brand-primary), var(--brand-accent))', boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)' }}>
+              Launch App
             </Link>
           </div>
         </div>
       </nav>
 
       <Hero />
+
+      <div id="pipeline">
+        <PipelineFlow />
+      </div>
+
       <HowItWorks />
-      <ModuleShowcase />
+
+      <div id="modules">
+        <ModuleShowcase />
+      </div>
 
       {/* CTA */}
-      <section className="py-24 px-6 text-center border-t border-[var(--border-default)]">
-        <h2 className="text-3xl md:text-4xl font-display font-bold">
-          Stop guessing. <span className="text-[var(--brand-primary)]">Start trading with edge.</span>
-        </h2>
-        <p className="mt-4 text-[var(--text-secondary)]">Free tier available. No credit card required.</p>
-        <Link
-          href="/app"
-          className="inline-flex items-center mt-8 rounded-xl bg-[var(--brand-primary)] px-10 py-4 text-white font-semibold hover:brightness-110 transition-all shadow-lg shadow-purple-500/25 text-lg"
-        >
-          Start Free Trial
-        </Link>
+      <section className="py-24 px-6 text-center border-t border-[var(--border-default)] relative overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 50% 50%, var(--brand-primary) 0%, transparent 70%)`,
+          }}
+        />
+        <div className="relative z-10">
+          <h2 className="text-3xl md:text-5xl font-display font-bold">
+            Stop Guessing.{' '}
+            <span className="bg-gradient-to-r from-[var(--brand-accent)] to-[var(--color-success)] bg-clip-text text-transparent">
+              Trade With Edge.
+            </span>
+          </h2>
+          <p className="mt-4 text-sm text-[var(--text-secondary)] font-mono">Free tier available · No credit card · Deploy in 60 seconds</p>
+          <Link
+            href="/app"
+            className="inline-flex items-center mt-8 rounded-lg px-10 py-4 text-white font-semibold text-lg transition-all"
+            style={{
+              background: 'linear-gradient(135deg, var(--brand-primary), var(--brand-accent))',
+              boxShadow: '0 0 40px rgba(139, 92, 246, 0.3), 0 0 80px rgba(0, 229, 255, 0.1)',
+            }}
+          >
+            Launch Dashboard →
+          </Link>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--border-default)] py-12 px-6">
-        <div className="max-w-5xl mx-auto flex items-center justify-between text-sm text-[var(--text-muted)]">
-          <p>© 2026 PredictEdge. All rights reserved.</p>
+      <footer className="border-t border-[var(--border-default)] py-8 px-6">
+        <div className="max-w-5xl mx-auto flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+          <p>© 2026 PredictEdge · All systems operational</p>
           <div className="flex gap-6">
-            <Link href="#" className="hover:text-[var(--text-secondary)]">Twitter</Link>
-            <Link href="#" className="hover:text-[var(--text-secondary)]">Discord</Link>
-            <Link href="#" className="hover:text-[var(--text-secondary)]">GitHub</Link>
+            <Link href="#" className="hover:text-[var(--text-secondary)] transition-colors">Twitter</Link>
+            <Link href="#" className="hover:text-[var(--text-secondary)] transition-colors">Discord</Link>
+            <Link href="#" className="hover:text-[var(--text-secondary)] transition-colors">GitHub</Link>
           </div>
         </div>
       </footer>
