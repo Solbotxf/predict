@@ -1,207 +1,379 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+/* ─── Animated flowing particles on SVG paths ─── */
+function FlowingPath({ d, color, delay = 0, duration = 3 }: { d: string; color: string; delay?: number; duration?: number }) {
+  return (
+    <g>
+      {/* Base path (dim) */}
+      <path d={d} stroke={`${color}15`} strokeWidth={1.5} fill="none" />
+      {/* Glow path */}
+      <path d={d} stroke={`${color}40`} strokeWidth={1} fill="none"
+        filter="url(#glow)" />
+      {/* Flowing particle */}
+      <circle r={3} fill={color} filter="url(#glow)">
+        <animateMotion dur={`${duration}s`} repeatCount="indefinite" begin={`${delay}s`}>
+          <mpath href={`#${d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`} />
+        </animateMotion>
+      </circle>
+      <circle r={6} fill={`${color}30`}>
+        <animateMotion dur={`${duration}s`} repeatCount="indefinite" begin={`${delay}s`}>
+          <mpath href={`#${d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`} />
+        </animateMotion>
+      </circle>
+      <path id={d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)} d={d} fill="none" />
+    </g>
+  )
+}
+
+/* ─── Data packet that flows through the pipeline ─── */
 interface DataPacket {
   id: number
   type: 'news' | 'market' | 'social' | 'onchain' | 'api'
   text: string
   color: string
+  icon: string
 }
 
-const packetTemplates: Omit<DataPacket, 'id'>[] = [
-  { type: 'news', text: 'Reuters: Fed signals rate cut path...', color: '#00E5FF' },
-  { type: 'market', text: 'Polymarket: BTC>100K → 45.2¢', color: '#8B5CF6' },
-  { type: 'social', text: 'Twitter sentiment: +0.34 bullish', color: '#FF9F43' },
-  { type: 'market', text: 'Kalshi: Recession 2026 → 28.1¢', color: '#8B5CF6' },
-  { type: 'news', text: 'WSJ: CPI falls to 2.1% YoY', color: '#00E5FF' },
-  { type: 'onchain', text: '🐳 Whale: 500K USDC → Polymarket', color: '#00D77E' },
-  { type: 'api', text: 'API: orderbook depth $2.4M', color: '#A78BFA' },
-  { type: 'market', text: 'Polymarket: Election GOP → 52.3¢', color: '#8B5CF6' },
-  { type: 'social', text: 'Reddit: r/prediction +180 posts/hr', color: '#FF9F43' },
-  { type: 'news', text: 'Bloomberg: ECB holds rates steady', color: '#00E5FF' },
-  { type: 'onchain', text: '⛓ Block 19.2M: 42 new positions', color: '#00D77E' },
-  { type: 'market', text: 'Kalshi: S&P>6K → 63.0¢', color: '#8B5CF6' },
+const packetPool: Omit<DataPacket, 'id'>[] = [
+  { type: 'news', text: 'Reuters: Fed signals rate cut...', color: '#00E5FF', icon: '📰' },
+  { type: 'market', text: 'POLY: BTC>100K → 45.2¢', color: '#8B5CF6', icon: '📊' },
+  { type: 'social', text: 'X sentiment: +0.34 bullish', color: '#FF9F43', icon: '🐦' },
+  { type: 'market', text: 'KALSHI: Recession → 28.1¢', color: '#8B5CF6', icon: '📊' },
+  { type: 'news', text: 'WSJ: CPI falls to 2.1% YoY', color: '#00E5FF', icon: '📰' },
+  { type: 'onchain', text: '🐳 500K USDC → Polymarket', color: '#00D77E', icon: '⛓' },
+  { type: 'api', text: 'Orderbook depth: $2.4M', color: '#A78BFA', icon: '🔌' },
+  { type: 'market', text: 'POLY: Election GOP → 52.3¢', color: '#8B5CF6', icon: '📊' },
+  { type: 'social', text: 'Reddit: +180 posts/hr', color: '#FF9F43', icon: '🐦' },
+  { type: 'onchain', text: 'Block 19.2M: 42 positions', color: '#00D77E', icon: '⛓' },
 ]
 
-const signalOutputs = [
-  { text: '🎯 SIGNAL: Fed Rate +9.9% edge → BUY YES', color: '#00D77E' },
-  { text: '⚡ ARB: Poly vs Kalshi spread 4.0%', color: '#FFD166' },
-  { text: '📉 SENTIMENT: BTC bearish shift -0.15', color: '#FF4B5C' },
-  { text: '🎯 SIGNAL: Recession -21.4% edge → SELL', color: '#FF4B5C' },
-  { text: '🤖 BOT: Execute BUY Fed-Yes 8% Kelly', color: '#00E5FF' },
+const signalOutputs: Omit<DataPacket, 'id'>[] = [
+  { type: 'market', text: '🎯 BUY YES Fed Rate +9.9%', color: '#00D77E', icon: '🎯' },
+  { type: 'market', text: '⚡ ARB Poly↔Kalshi 4.0%', color: '#FFD166', icon: '⚡' },
+  { type: 'market', text: '📉 SELL BTC bearish -0.15', color: '#FF4B5C', icon: '📉' },
+  { type: 'market', text: '🤖 BOT: 8% Kelly → Execute', color: '#00E5FF', icon: '🤖' },
 ]
 
-function DataStream({ items, side }: { items: typeof packetTemplates; side: 'left' | 'right' }) {
-  const [visibleIdx, setVisibleIdx] = useState(0)
+function StreamColumn({ items, side, speed = 2000 }: { items: Omit<DataPacket, 'id'>[]; side: 'left' | 'right'; speed?: number }) {
+  const [offset, setOffset] = useState(0)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setVisibleIdx(prev => (prev + 1) % items.length)
-    }, side === 'left' ? 1800 : 2200)
+    setMounted(true)
+    const interval = setInterval(() => setOffset(o => (o + 1) % items.length), speed)
     return () => clearInterval(interval)
-  }, [items.length, side])
+  }, [items.length, speed])
+
+  if (!mounted) return <div className="h-[180px]" />
+
+  const visible = Array.from({ length: 4 }, (_, i) => items[(offset + i) % items.length])
 
   return (
-    <div className="space-y-1 overflow-hidden h-[200px] relative">
+    <div className="space-y-1.5 overflow-hidden h-[180px] relative">
       <AnimatePresence mode="popLayout">
-        {items.slice(visibleIdx, visibleIdx + 5).map((item, i) => (
+        {visible.map((item, i) => (
           <motion.div
-            key={`${side}-${visibleIdx}-${i}`}
-            initial={{ opacity: 0, x: side === 'left' ? -20 : 20, scale: 0.95 }}
-            animate={{ opacity: 1 - i * 0.18, x: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3, delay: i * 0.05 }}
-            className="flex items-center gap-2 text-xs font-mono py-1.5 px-3 rounded"
-            style={{ background: `${item.color}08`, borderLeft: `2px solid ${item.color}40` }}
+            key={`${side}-${offset}-${i}`}
+            initial={{ opacity: 0, x: side === 'left' ? -30 : 30, filter: 'blur(4px)' }}
+            animate={{ opacity: 1 - i * 0.2, x: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            className="flex items-center gap-2 py-1.5 px-2.5 rounded-md font-mono text-[11px]"
+            style={{ 
+              background: `linear-gradient(90deg, ${item.color}06, ${item.color}03)`,
+              borderLeft: side === 'left' ? `2px solid ${item.color}50` : 'none',
+              borderRight: side === 'right' ? `2px solid ${item.color}50` : 'none',
+            }}
           >
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.color, boxShadow: `0 0 6px ${item.color}80` }} />
-            <span className="truncate text-[var(--text-secondary)]" style={{ color: `${item.color}CC` }}>{item.text}</span>
+            <span className="text-sm flex-shrink-0">{item.icon}</span>
+            <span className="truncate" style={{ color: `${item.color}DD` }}>{item.text}</span>
           </motion.div>
         ))}
       </AnimatePresence>
-      <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[var(--bg-primary)] to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[var(--bg-primary)] to-transparent pointer-events-none" />
+    </div>
+  )
+}
+
+function PipelineNode({ icon, label, sublabel, color, metrics, isActive = true }: {
+  icon: string; label: string; sublabel: string; color: string; metrics?: { label: string; value: string }[]; isActive?: boolean
+}) {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.03, y: -2 }}
+      transition={{ type: 'spring', stiffness: 300 }}
+      className="relative p-4 rounded-lg cursor-pointer group"
+      style={{
+        background: `linear-gradient(135deg, ${color}08, ${color}04)`,
+        border: `1px solid ${color}20`,
+        boxShadow: `0 0 20px ${color}08`,
+      }}
+    >
+      {/* Corner glow */}
+      <div className="absolute -top-px -right-px w-8 h-8 rounded-tr-lg opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ background: `radial-gradient(circle at top right, ${color}20, transparent)` }} />
+
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">{icon}</span>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold tracking-widest" style={{ color }}>{label}</span>
+            {isActive && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
+              </span>
+            )}
+          </div>
+          <p className="text-[9px] text-[var(--text-muted)] font-mono">{sublabel}</p>
+        </div>
+      </div>
+
+      {/* Progress bar with shimmer */}
+      <div className="h-1 rounded-full bg-white/5 overflow-hidden mb-2">
+        <motion.div
+          className="h-full rounded-full relative overflow-hidden"
+          style={{ background: `linear-gradient(90deg, ${color}80, ${color})` }}
+          animate={{ width: ['60%', '95%', '75%', '90%', '60%'] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {/* Shimmer effect */}
+          <motion.div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(90deg, transparent, ${color}40, transparent)` }}
+            animate={{ x: ['-100%', '200%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+          />
+        </motion.div>
+      </div>
+
+      {metrics && (
+        <div className="flex gap-3">
+          {metrics.map(m => (
+            <div key={m.label}>
+              <p className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{m.label}</p>
+              <p className="text-xs font-mono font-bold" style={{ color }}>{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+/* ─── Animated connection lines between pipeline stages ─── */
+function ConnectionBeam({ color, delay = 0 }: { color: string; delay?: number }) {
+  return (
+    <div className="hidden md:flex flex-col items-center justify-center gap-1 w-12 relative">
+      {/* Line */}
+      <div className="w-full h-[1px] relative overflow-hidden" style={{ background: `${color}15` }}>
+        <motion.div
+          className="absolute top-0 h-full w-8"
+          style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
+          animate={{ left: ['-32px', 'calc(100% + 32px)'] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'linear', delay }}
+        />
+      </div>
+      {/* Arrows */}
+      <motion.span
+        className="text-[10px] font-mono"
+        style={{ color: `${color}60` }}
+        animate={{ opacity: [0.3, 1, 0.3] }}
+        transition={{ duration: 1.5, repeat: Infinity, delay }}
+      >
+        ›››
+      </motion.span>
     </div>
   )
 }
 
 export function PipelineFlow() {
   return (
-    <section className="py-20 px-6 border-t border-[var(--border-default)] relative overflow-hidden">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-12">
-          <span className="badge-live mb-4 inline-flex">
+    <section className="py-24 px-6 relative overflow-hidden" id="pipeline">
+      {/* Background grid */}
+      <div className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle, rgba(0,229,255,0.4) 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px',
+        }}
+      />
+
+      <div className="max-w-7xl mx-auto relative">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6"
+            style={{ background: 'rgba(0, 229, 255, 0.06)', border: '1px solid rgba(0, 229, 255, 0.1)' }}
+          >
             <span className="pulse-dot" style={{ width: 6, height: 6 }} />
-            LIVE PIPELINE
-          </span>
-          <h2 className="text-3xl md:text-4xl font-display font-bold mt-4">
-            Watch Your Data <span style={{ color: 'var(--brand-accent)' }}>Flow in Real-Time</span>
-          </h2>
-          <p className="mt-3 text-sm text-[var(--text-secondary)] max-w-xl mx-auto">
-            Multi-source data streams → AI processing pipeline → Actionable signals for your trading bot
-          </p>
+            <span className="text-[10px] font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">
+              Live Pipeline · 1,247 events/min
+            </span>
+          </motion.div>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-3xl md:text-5xl font-display font-bold"
+          >
+            Watch Your Data{' '}
+            <span className="relative">
+              <span className="bg-gradient-to-r from-[var(--brand-accent)] via-[var(--brand-primary)] to-[var(--color-success)] bg-clip-text text-transparent">
+                Flow in Real-Time
+              </span>
+              {/* Underline glow */}
+              <motion.span
+                className="absolute -bottom-1 left-0 h-[2px] rounded-full"
+                style={{ background: 'linear-gradient(90deg, var(--brand-accent), var(--brand-primary), var(--color-success))' }}
+                initial={{ width: 0 }}
+                whileInView={{ width: '100%' }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.5, duration: 0.8, ease: 'easeOut' }}
+              />
+            </span>
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+            className="mt-4 text-sm text-[var(--text-secondary)] max-w-2xl mx-auto font-mono"
+          >
+            Multi-source intelligence → AI processing → Kelly-optimal signals → Automated execution
+          </motion.p>
         </div>
 
-        {/* Pipeline visualization */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-4 items-start">
+        {/* Pipeline visualization — 5-column flow */}
+        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_auto_1fr_auto_1.2fr] gap-3 items-start">
           {/* LEFT: Data Sources */}
-          <div className="glass-card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-mono font-bold text-[var(--brand-accent)] uppercase tracking-wider">Data Sources</span>
-              <span className="badge-live text-[9px]"><span className="pulse-dot" style={{ width: 5, height: 5 }} /> LIVE</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {['News', 'Markets', 'Social', 'On-chain', 'APIs'].map((src) => (
-                <span key={src} className="chip chip-active text-[10px]">{src}</span>
-              ))}
-            </div>
-            <DataStream items={packetTemplates} side="left" />
-          </div>
-
-          {/* Arrow */}
-          <div className="hidden md:flex items-center justify-center h-full">
-            <div className="flex flex-col items-center gap-1">
-              <motion.div
-                animate={{ x: [0, 8, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                className="text-[var(--brand-accent)] text-lg font-mono"
-              >
-                →→
-              </motion.div>
-              <span className="text-[9px] text-[var(--text-muted)] font-mono">STREAM</span>
-            </div>
-          </div>
-
-          {/* CENTER: Processing Pipeline */}
-          <div className="glass-card p-4" style={{ borderColor: 'rgba(139, 92, 246, 0.15)' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-mono font-bold text-[var(--brand-primary)] uppercase tracking-wider">AI Pipeline</span>
-              <span className="text-[9px] font-mono text-[var(--text-muted)]">3 STAGES</span>
-            </div>
-            <div className="space-y-2">
-              {[
-                { label: 'INGEST', desc: 'Parse & normalize', icon: '📥', color: '#00E5FF', load: 92 },
-                { label: 'ANALYZE', desc: 'LLM + Statistical', icon: '🧠', color: '#8B5CF6', load: 78 },
-                { label: 'SIGNAL', desc: 'Edge detection', icon: '🎯', color: '#00D77E', load: 85 },
-              ].map((stage, i) => (
-                <motion.div
-                  key={stage.label}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.2 }}
-                  className="p-3 rounded-md relative overflow-hidden"
-                  style={{ background: `${stage.color}06`, border: `1px solid ${stage.color}15` }}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span>{stage.icon}</span>
-                      <span className="text-[10px] font-mono font-bold tracking-wider" style={{ color: stage.color }}>{stage.label}</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-[var(--text-muted)]">{stage.load}%</span>
-                  </div>
-                  <p className="text-[10px] text-[var(--text-muted)]">{stage.desc}</p>
-                  {/* Load bar */}
-                  <div className="mt-2 h-0.5 rounded-full bg-white/5 overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: stage.color }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${stage.load}%` }}
-                      transition={{ duration: 1.5, delay: i * 0.3 }}
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-            
-            {/* Pipeline metrics */}
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              {[
-                { label: 'Latency', value: '< 200ms', color: '#00D77E' },
-                { label: 'Events/s', value: '1,247', color: '#00E5FF' },
-                { label: 'Models', value: '4 active', color: '#A78BFA' },
-              ].map((m) => (
-                <div key={m.label} className="text-center p-2 rounded" style={{ background: `${m.color}06` }}>
-                  <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase">{m.label}</p>
-                  <p className="text-xs font-mono font-bold mt-0.5" style={{ color: m.color }}>{m.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Arrow */}
-          <div className="hidden md:flex items-center justify-center h-full">
-            <div className="flex flex-col items-center gap-1">
-              <motion.div
-                animate={{ x: [0, 8, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                className="text-[var(--color-success)] text-lg font-mono"
-              >
-                →→
-              </motion.div>
-              <span className="text-[9px] text-[var(--text-muted)] font-mono">OUTPUT</span>
-            </div>
-          </div>
-
-          {/* RIGHT: Signal Output */}
-          <div className="glass-card p-4" style={{ borderColor: 'rgba(0, 215, 126, 0.15)' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-mono font-bold text-[var(--color-success)] uppercase tracking-wider">Signals & Actions</span>
-              <span className="badge-live text-[9px]"><span className="pulse-dot" style={{ width: 5, height: 5 }} /> LIVE</span>
-            </div>
-            <DataStream items={signalOutputs} side="right" />
-            
-            <div className="mt-3 p-3 rounded-md" style={{ background: 'rgba(0, 229, 255, 0.04)', border: '1px solid rgba(0, 229, 255, 0.1)' }}>
-              <p className="text-[10px] font-mono text-[var(--brand-accent)] uppercase tracking-wider mb-1">Trading Bot Status</p>
-              <div className="flex items-center justify-between">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="glass-card p-4" style={{ borderColor: 'rgba(0, 229, 255, 0.08)' }}>
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="pulse-dot" />
-                  <span className="text-xs font-mono text-[var(--text-primary)]">Active</span>
+                  <span className="text-xs font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">Data Sources</span>
+                  <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> 5 ACTIVE</span>
                 </div>
-                <span className="text-xs font-mono text-[var(--color-success)]">+$2,847 today</span>
+              </div>
+              
+              {/* Source type badges */}
+              <div className="flex flex-wrap gap-1 mb-3">
+                {[
+                  { label: 'News Feeds', color: '#00E5FF', count: '435+' },
+                  { label: 'Markets', color: '#8B5CF6', count: '1,200' },
+                  { label: 'Social', color: '#FF9F43', count: '12K' },
+                  { label: 'On-chain', color: '#00D77E', count: '8' },
+                  { label: 'APIs', color: '#A78BFA', count: '24' },
+                ].map(s => (
+                  <span key={s.label} className="text-[9px] font-mono px-2 py-0.5 rounded flex items-center gap-1"
+                    style={{ background: `${s.color}08`, border: `1px solid ${s.color}15`, color: `${s.color}CC` }}>
+                    <span className="w-1 h-1 rounded-full" style={{ background: s.color }} />
+                    {s.label} <span className="text-[var(--text-muted)]">({s.count})</span>
+                  </span>
+                ))}
+              </div>
+
+              <StreamColumn items={packetPool} side="left" speed={1600} />
+            </div>
+          </motion.div>
+
+          <ConnectionBeam color="#00E5FF" delay={0} />
+
+          {/* CENTER: AI Processing Pipeline */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <div className="space-y-3">
+              <PipelineNode
+                icon="📥" label="INGEST" sublabel="Parse, normalize, deduplicate"
+                color="#00E5FF"
+                metrics={[{ label: 'Throughput', value: '1,247/min' }, { label: 'Latency', value: '12ms' }]}
+              />
+              <div className="flex justify-center">
+                <motion.div
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="text-[var(--text-muted)] text-xs font-mono"
+                >↓</motion.div>
+              </div>
+              <PipelineNode
+                icon="🧠" label="ANALYZE" sublabel="LLM + Statistical + Ensemble"
+                color="#8B5CF6"
+                metrics={[{ label: 'Models', value: '4 active' }, { label: 'Accuracy', value: '68.3%' }]}
+              />
+              <div className="flex justify-center">
+                <motion.div
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
+                  className="text-[var(--text-muted)] text-xs font-mono"
+                >↓</motion.div>
+              </div>
+              <PipelineNode
+                icon="🎯" label="SIGNAL GEN" sublabel="Edge detection, Kelly sizing"
+                color="#00D77E"
+                metrics={[{ label: 'Signals/hr', value: '47' }, { label: 'Avg Edge', value: '6.2%' }]}
+              />
+            </div>
+          </motion.div>
+
+          <ConnectionBeam color="#00D77E" delay={0.5} />
+
+          {/* RIGHT: Signal Output & Execution */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <div className="glass-card p-4" style={{ borderColor: 'rgba(0, 215, 126, 0.08)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-mono font-bold text-[var(--color-success)] uppercase tracking-widest">Signals & Execution</span>
+                <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> AUTO</span>
+              </div>
+
+              <StreamColumn items={signalOutputs} side="right" speed={2800} />
+
+              {/* Bot status panel */}
+              <div className="mt-3 p-3 rounded-lg relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.04), rgba(0, 215, 126, 0.04))', border: '1px solid rgba(0, 229, 255, 0.08)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">Trading Bot</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#00D77E', boxShadow: '0 0 6px #00D77E' }} />
+                    <span className="text-[9px] font-mono text-[var(--color-success)]">ACTIVE</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'PnL Today', value: '+$2,847', color: '#00D77E' },
+                    { label: 'Positions', value: '12', color: '#00E5FF' },
+                    { label: 'Win Rate', value: '71%', color: '#FFD166' },
+                  ].map(m => (
+                    <div key={m.label} className="text-center">
+                      <p className="text-[8px] font-mono text-[var(--text-muted)] uppercase">{m.label}</p>
+                      <p className="text-xs font-mono font-bold" style={{ color: m.color }}>{m.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>
