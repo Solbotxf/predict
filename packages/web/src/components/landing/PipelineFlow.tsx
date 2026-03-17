@@ -1,209 +1,293 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-/* ─── Animated flowing particles on SVG paths ─── */
-function FlowingPath({ d, color, delay = 0, duration = 3 }: { d: string; color: string; delay?: number; duration?: number }) {
+/* ═══════════════════════════════════════════════════
+   Canvas-based animated particle flow background
+   ═══════════════════════════════════════════════════ */
+function FlowCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animRef = useRef<number>(0)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect()
+      canvas.width = rect.width * dpr
+      canvas.height = rect.height * dpr
+      ctx.scale(dpr, dpr)
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    // Define flow paths (bezier curves from left → center → right)
+    const W = () => canvas.getBoundingClientRect().width
+    const H = () => canvas.getBoundingClientRect().height
+
+    interface Particle {
+      path: number    // which path (0-4)
+      t: number       // 0..1 progress along path
+      speed: number
+      size: number
+      color: string
+      glow: number
+    }
+
+    const colors = ['#00E5FF', '#8B5CF6', '#FF9F43', '#00D77E', '#A78BFA']
+    const particles: Particle[] = []
+
+    // Spawn particles
+    const spawn = () => {
+      if (particles.length < 60) {
+        particles.push({
+          path: Math.floor(Math.random() * 5),
+          t: 0,
+          speed: 0.001 + Math.random() * 0.003,
+          size: 1.5 + Math.random() * 2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          glow: 8 + Math.random() * 12,
+        })
+      }
+    }
+
+    // Get point on path
+    const getPoint = (pathIdx: number, t: number, w: number, h: number): [number, number] => {
+      // 5 paths: fan in from left to center, then fan out to right
+      const startY = [h * 0.15, h * 0.3, h * 0.5, h * 0.7, h * 0.85][pathIdx]
+      const midY = h * 0.5
+      const endY = [h * 0.2, h * 0.35, h * 0.5, h * 0.65, h * 0.8][pathIdx]
+
+      if (t <= 0.45) {
+        // Left → Center (converge)
+        const lt = t / 0.45
+        const x = lt * w * 0.45
+        const y = startY + (midY - startY) * (lt * lt) // ease in
+        return [x, y]
+      } else if (t <= 0.55) {
+        // Center zone (processing)
+        const lt = (t - 0.45) / 0.1
+        const x = w * 0.45 + lt * w * 0.1
+        const y = midY + Math.sin(lt * Math.PI * 3) * 8 // wiggle
+        return [x, y]
+      } else {
+        // Center → Right (diverge)
+        const lt = (t - 0.55) / 0.45
+        const x = w * 0.55 + lt * w * 0.45
+        const y = midY + (endY - midY) * (lt * lt) // ease in
+        return [x, y]
+      }
+    }
+
+    let spawnTimer = 0
+    const animate = () => {
+      const w = canvas.getBoundingClientRect().width
+      const h = canvas.getBoundingClientRect().height
+      ctx.clearRect(0, 0, w, h)
+
+      // Draw flow paths (very subtle)
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath()
+        ctx.strokeStyle = `${colors[i]}08`
+        ctx.lineWidth = 1
+        for (let t = 0; t <= 1; t += 0.01) {
+          const [x, y] = getPoint(i, t, w, h)
+          if (t === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+      }
+
+      // Draw center zone glow
+      const gradient = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.15)
+      gradient.addColorStop(0, 'rgba(139, 92, 246, 0.06)')
+      gradient.addColorStop(1, 'transparent')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, w, h)
+
+      // Spawn
+      spawnTimer++
+      if (spawnTimer % 4 === 0) spawn()
+
+      // Update & draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]
+        p.t += p.speed
+
+        if (p.t > 1) {
+          particles.splice(i, 1)
+          continue
+        }
+
+        const [x, y] = getPoint(p.path, p.t, w, h)
+
+        // Outer glow
+        ctx.beginPath()
+        ctx.arc(x, y, p.glow, 0, Math.PI * 2)
+        ctx.fillStyle = `${p.color}08`
+        ctx.fill()
+
+        // Inner glow
+        ctx.beginPath()
+        ctx.arc(x, y, p.size * 2, 0, Math.PI * 2)
+        ctx.fillStyle = `${p.color}30`
+        ctx.fill()
+
+        // Core
+        ctx.beginPath()
+        ctx.arc(x, y, p.size, 0, Math.PI * 2)
+        ctx.fillStyle = `${p.color}CC`
+        ctx.fill()
+
+        // Trail
+        for (let tr = 1; tr <= 4; tr++) {
+          const tt = p.t - p.speed * tr * 3
+          if (tt < 0) continue
+          const [tx, ty] = getPoint(p.path, tt, w, h)
+          ctx.beginPath()
+          ctx.arc(tx, ty, p.size * (1 - tr * 0.2), 0, Math.PI * 2)
+          ctx.fillStyle = `${p.color}${Math.floor(20 - tr * 5).toString(16).padStart(2, '0')}`
+          ctx.fill()
+        }
+      }
+
+      animRef.current = requestAnimationFrame(animate)
+    }
+
+    animRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      cancelAnimationFrame(animRef.current)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
   return (
-    <g>
-      {/* Base path (dim) */}
-      <path d={d} stroke={`${color}15`} strokeWidth={1.5} fill="none" />
-      {/* Glow path */}
-      <path d={d} stroke={`${color}40`} strokeWidth={1} fill="none"
-        filter="url(#glow)" />
-      {/* Flowing particle */}
-      <circle r={3} fill={color} filter="url(#glow)">
-        <animateMotion dur={`${duration}s`} repeatCount="indefinite" begin={`${delay}s`}>
-          <mpath href={`#${d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`} />
-        </animateMotion>
-      </circle>
-      <circle r={6} fill={`${color}30`}>
-        <animateMotion dur={`${duration}s`} repeatCount="indefinite" begin={`${delay}s`}>
-          <mpath href={`#${d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`} />
-        </animateMotion>
-      </circle>
-      <path id={d.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)} d={d} fill="none" />
-    </g>
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full"
+      style={{ opacity: 0.9 }}
+    />
   )
 }
 
-/* ─── Data packet that flows through the pipeline ─── */
-interface DataPacket {
-  id: number
-  type: 'news' | 'market' | 'social' | 'onchain' | 'api'
-  text: string
-  color: string
-  icon: string
-}
-
-const packetPool: Omit<DataPacket, 'id'>[] = [
-  { type: 'news', text: 'Reuters: Fed signals rate cut...', color: '#00E5FF', icon: '📰' },
-  { type: 'market', text: 'POLY: BTC>100K → 45.2¢', color: '#8B5CF6', icon: '📊' },
-  { type: 'social', text: 'X sentiment: +0.34 bullish', color: '#FF9F43', icon: '🐦' },
-  { type: 'market', text: 'KALSHI: Recession → 28.1¢', color: '#8B5CF6', icon: '📊' },
-  { type: 'news', text: 'WSJ: CPI falls to 2.1% YoY', color: '#00E5FF', icon: '📰' },
-  { type: 'onchain', text: '🐳 500K USDC → Polymarket', color: '#00D77E', icon: '⛓' },
-  { type: 'api', text: 'Orderbook depth: $2.4M', color: '#A78BFA', icon: '🔌' },
-  { type: 'market', text: 'POLY: Election GOP → 52.3¢', color: '#8B5CF6', icon: '📊' },
-  { type: 'social', text: 'Reddit: +180 posts/hr', color: '#FF9F43', icon: '🐦' },
-  { type: 'onchain', text: 'Block 19.2M: 42 positions', color: '#00D77E', icon: '⛓' },
+/* ═══════════════════════════════════════════════════
+   Floating data labels that appear/disappear
+   ═══════════════════════════════════════════════════ */
+const dataLabels = [
+  { text: 'Reuters: Fed rate cut signal', color: '#00E5FF', icon: '📰' },
+  { text: 'POLY: BTC>100K @ 45.2¢', color: '#8B5CF6', icon: '📊' },
+  { text: 'X: sentiment +0.34', color: '#FF9F43', icon: '🐦' },
+  { text: 'Whale: 500K USDC inflow', color: '#00D77E', icon: '🐳' },
+  { text: 'KALSHI: Recession @ 28.1¢', color: '#8B5CF6', icon: '📊' },
+  { text: 'WSJ: CPI 2.1% YoY', color: '#00E5FF', icon: '📰' },
+  { text: 'Reddit: +180 posts/hr', color: '#FF9F43', icon: '💬' },
+  { text: 'API: depth $2.4M', color: '#A78BFA', icon: '🔌' },
 ]
 
-const signalOutputs: Omit<DataPacket, 'id'>[] = [
-  { type: 'market', text: '🎯 BUY YES Fed Rate +9.9%', color: '#00D77E', icon: '🎯' },
-  { type: 'market', text: '⚡ ARB Poly↔Kalshi 4.0%', color: '#FFD166', icon: '⚡' },
-  { type: 'market', text: '📉 SELL BTC bearish -0.15', color: '#FF4B5C', icon: '📉' },
-  { type: 'market', text: '🤖 BOT: 8% Kelly → Execute', color: '#00E5FF', icon: '🤖' },
+const signalLabels = [
+  { text: 'BUY YES Fed Rate · +9.9% edge', color: '#00D77E', icon: '🎯' },
+  { text: 'ARB: Poly↔Kalshi 4.0%', color: '#FFD166', icon: '⚡' },
+  { text: 'SELL BTC · bearish shift', color: '#FF4B5C', icon: '📉' },
+  { text: 'BOT: Execute 8% Kelly', color: '#00E5FF', icon: '🤖' },
 ]
 
-function StreamColumn({ items, side, speed = 2000 }: { items: Omit<DataPacket, 'id'>[]; side: 'left' | 'right'; speed?: number }) {
-  const [offset, setOffset] = useState(0)
+function FloatingLabels({ items, side }: { items: typeof dataLabels; side: 'left' | 'right' }) {
+  const [activeIdx, setActiveIdx] = useState(0)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    const interval = setInterval(() => setOffset(o => (o + 1) % items.length), speed)
+    const interval = setInterval(() => setActiveIdx(i => (i + 1) % items.length), side === 'left' ? 1800 : 2400)
     return () => clearInterval(interval)
-  }, [items.length, speed])
+  }, [items.length, side])
 
-  if (!mounted) return <div className="h-[180px]" />
+  if (!mounted) return null
 
-  const visible = Array.from({ length: 4 }, (_, i) => items[(offset + i) % items.length])
+  const visible = Array.from({ length: Math.min(3, items.length) }, (_, i) => ({
+    ...items[(activeIdx + i) % items.length],
+    idx: i,
+  }))
 
   return (
-    <div className="space-y-1.5 overflow-hidden h-[180px] relative">
+    <div className="space-y-2">
       <AnimatePresence mode="popLayout">
         {visible.map((item, i) => (
           <motion.div
-            key={`${side}-${offset}-${i}`}
-            initial={{ opacity: 0, x: side === 'left' ? -30 : 30, filter: 'blur(4px)' }}
-            animate={{ opacity: 1 - i * 0.2, x: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            className="flex items-center gap-2 py-1.5 px-2.5 rounded-md font-mono text-[11px]"
-            style={{ 
-              background: `linear-gradient(90deg, ${item.color}06, ${item.color}03)`,
-              borderLeft: side === 'left' ? `2px solid ${item.color}50` : 'none',
-              borderRight: side === 'right' ? `2px solid ${item.color}50` : 'none',
+            key={`${side}-${activeIdx}-${i}`}
+            initial={{ opacity: 0, x: side === 'left' ? -20 : 20, scale: 0.9, filter: 'blur(4px)' }}
+            animate={{ opacity: 1 - i * 0.25, x: 0, scale: 1 - i * 0.02, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.95, filter: 'blur(4px)' }}
+            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            className="flex items-center gap-2 text-[11px] font-mono px-3 py-2 rounded-md whitespace-nowrap"
+            style={{
+              background: `linear-gradient(${side === 'left' ? '90deg' : '270deg'}, ${item.color}0A, transparent)`,
+              border: `1px solid ${item.color}12`,
+              [side === 'left' ? 'borderLeft' : 'borderRight']: `2px solid ${item.color}50`,
             }}
           >
-            <span className="text-sm flex-shrink-0">{item.icon}</span>
-            <span className="truncate" style={{ color: `${item.color}DD` }}>{item.text}</span>
+            <span className="text-sm">{item.icon}</span>
+            <span style={{ color: `${item.color}CC` }}>{item.text}</span>
           </motion.div>
         ))}
       </AnimatePresence>
-      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[var(--bg-primary)] to-transparent pointer-events-none" />
     </div>
   )
 }
 
-function PipelineNode({ icon, label, sublabel, color, metrics, isActive = true }: {
-  icon: string; label: string; sublabel: string; color: string; metrics?: { label: string; value: string }[]; isActive?: boolean
-}) {
+/* ═══════════════════════════════════════════════════
+   Central node visualization
+   ═══════════════════════════════════════════════════ */
+function CentralNode() {
   return (
-    <motion.div
-      whileHover={{ scale: 1.03, y: -2 }}
-      transition={{ type: 'spring', stiffness: 300 }}
-      className="relative p-4 rounded-lg cursor-pointer group"
-      style={{
-        background: `linear-gradient(135deg, ${color}08, ${color}04)`,
-        border: `1px solid ${color}20`,
-        boxShadow: `0 0 20px ${color}08`,
-      }}
-    >
-      {/* Corner glow */}
-      <div className="absolute -top-px -right-px w-8 h-8 rounded-tr-lg opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ background: `radial-gradient(circle at top right, ${color}20, transparent)` }} />
+    <div className="relative flex items-center justify-center">
+      {/* Outer ring - pulsing */}
+      <motion.div
+        className="absolute w-32 h-32 rounded-full"
+        style={{ border: '1px solid rgba(139, 92, 246, 0.15)' }}
+        animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute w-24 h-24 rounded-full"
+        style={{ border: '1px solid rgba(0, 229, 255, 0.2)' }}
+        animate={{ scale: [1.1, 1, 1.1], opacity: [0.4, 0.7, 0.4] }}
+        transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+      />
 
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">{icon}</span>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold tracking-widest" style={{ color }}>{label}</span>
-            {isActive && (
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
-              </span>
-            )}
-          </div>
-          <p className="text-[9px] text-[var(--text-muted)] font-mono">{sublabel}</p>
-        </div>
-      </div>
-
-      {/* Progress bar with shimmer */}
-      <div className="h-1 rounded-full bg-white/5 overflow-hidden mb-2">
-        <motion.div
-          className="h-full rounded-full relative overflow-hidden"
-          style={{ background: `linear-gradient(90deg, ${color}80, ${color})` }}
-          animate={{ width: ['60%', '95%', '75%', '90%', '60%'] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {/* Shimmer effect */}
-          <motion.div
-            className="absolute inset-0"
-            style={{ background: `linear-gradient(90deg, transparent, ${color}40, transparent)` }}
-            animate={{ x: ['-100%', '200%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          />
-        </motion.div>
-      </div>
-
-      {metrics && (
-        <div className="flex gap-3">
-          {metrics.map(m => (
-            <div key={m.label}>
-              <p className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{m.label}</p>
-              <p className="text-xs font-mono font-bold" style={{ color }}>{m.value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
-/* ─── Animated connection lines between pipeline stages ─── */
-function ConnectionBeam({ color, delay = 0 }: { color: string; delay?: number }) {
-  return (
-    <div className="hidden md:flex flex-col items-center justify-center gap-1 w-12 relative">
-      {/* Line */}
-      <div className="w-full h-[1px] relative overflow-hidden" style={{ background: `${color}15` }}>
-        <motion.div
-          className="absolute top-0 h-full w-8"
-          style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }}
-          animate={{ left: ['-32px', 'calc(100% + 32px)'] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'linear', delay }}
-        />
-      </div>
-      {/* Arrows */}
-      <motion.span
-        className="text-[10px] font-mono"
-        style={{ color: `${color}60` }}
-        animate={{ opacity: [0.3, 1, 0.3] }}
-        transition={{ duration: 1.5, repeat: Infinity, delay }}
+      {/* Core */}
+      <div className="relative w-16 h-16 rounded-full flex items-center justify-center z-10"
+        style={{
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.2), rgba(6, 7, 16, 0.9))',
+          border: '1px solid rgba(139, 92, 246, 0.3)',
+          boxShadow: '0 0 40px rgba(139, 92, 246, 0.2), inset 0 0 20px rgba(139, 92, 246, 0.1)',
+        }}
       >
-        ›››
-      </motion.span>
+        <span className="text-2xl">🧠</span>
+      </div>
+
+      {/* Labels around the core */}
+      <div className="absolute -bottom-10 text-center">
+        <p className="text-[10px] font-mono font-bold text-[var(--brand-primary)] tracking-widest">AI ENGINE</p>
+        <p className="text-[8px] font-mono text-[var(--text-muted)]">4 models · 68.3% accuracy</p>
+      </div>
     </div>
   )
 }
 
+/* ═══════════════════════════════════════════════════
+   Main Pipeline Flow Section
+   ═══════════════════════════════════════════════════ */
 export function PipelineFlow() {
   return (
     <section className="py-24 px-6 relative overflow-hidden" id="pipeline">
-      {/* Background grid */}
-      <div className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle, rgba(0,229,255,0.4) 1px, transparent 1px)
-          `,
-          backgroundSize: '40px 40px',
-        }}
-      />
-
       <div className="max-w-7xl mx-auto relative">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -213,7 +297,7 @@ export function PipelineFlow() {
           >
             <span className="pulse-dot" style={{ width: 6, height: 6 }} />
             <span className="text-[10px] font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">
-              Live Pipeline · 1,247 events/min
+              Live Intelligence Pipeline
             </span>
           </motion.div>
 
@@ -225,11 +309,10 @@ export function PipelineFlow() {
             className="text-3xl md:text-5xl font-display font-bold"
           >
             Watch Your Data{' '}
-            <span className="relative">
+            <span className="relative inline-block">
               <span className="bg-gradient-to-r from-[var(--brand-accent)] via-[var(--brand-primary)] to-[var(--color-success)] bg-clip-text text-transparent">
                 Flow in Real-Time
               </span>
-              {/* Underline glow */}
               <motion.span
                 className="absolute -bottom-1 left-0 h-[2px] rounded-full"
                 style={{ background: 'linear-gradient(90deg, var(--brand-accent), var(--brand-primary), var(--color-success))' }}
@@ -240,140 +323,108 @@ export function PipelineFlow() {
               />
             </span>
           </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
-            className="mt-4 text-sm text-[var(--text-secondary)] max-w-2xl mx-auto font-mono"
-          >
-            Multi-source intelligence → AI processing → Kelly-optimal signals → Automated execution
-          </motion.p>
         </div>
 
-        {/* Pipeline visualization — 5-column flow */}
-        <div className="grid grid-cols-1 md:grid-cols-[1.2fr_auto_1fr_auto_1.2fr] gap-3 items-start">
-          {/* LEFT: Data Sources */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="glass-card p-4" style={{ borderColor: 'rgba(0, 229, 255, 0.08)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">Data Sources</span>
-                  <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> 5 ACTIVE</span>
-                </div>
-              </div>
-              
-              {/* Source type badges */}
-              <div className="flex flex-wrap gap-1 mb-3">
-                {[
-                  { label: 'News Feeds', color: '#00E5FF', count: '435+' },
-                  { label: 'Markets', color: '#8B5CF6', count: '1,200' },
-                  { label: 'Social', color: '#FF9F43', count: '12K' },
-                  { label: 'On-chain', color: '#00D77E', count: '8' },
-                  { label: 'APIs', color: '#A78BFA', count: '24' },
-                ].map(s => (
-                  <span key={s.label} className="text-[9px] font-mono px-2 py-0.5 rounded flex items-center gap-1"
-                    style={{ background: `${s.color}08`, border: `1px solid ${s.color}15`, color: `${s.color}CC` }}>
-                    <span className="w-1 h-1 rounded-full" style={{ background: s.color }} />
-                    {s.label} <span className="text-[var(--text-muted)]">({s.count})</span>
+        {/* ───── THE VISUALIZATION ───── */}
+        <div className="relative mt-8" style={{ height: '520px' }}>
+          {/* Canvas particle flow (the hero visual) */}
+          <FlowCanvas />
+
+          {/* Overlay: Left labels (data sources) */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-64">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-[9px] font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">Data Sources</span>
+              <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> 5 FEEDS</span>
+            </div>
+            <FloatingLabels items={dataLabels} side="left" />
+
+            {/* Source badges */}
+            <div className="flex flex-wrap gap-1 mt-3">
+              {['News 435+', 'Markets 1.2K', 'Social 12K', 'Chain 8', 'API 24'].map(s => {
+                const c = s.startsWith('News') ? '#00E5FF' : s.startsWith('Mar') ? '#8B5CF6' : s.startsWith('Soc') ? '#FF9F43' : s.startsWith('Ch') ? '#00D77E' : '#A78BFA'
+                return (
+                  <span key={s} className="text-[8px] font-mono px-1.5 py-0.5 rounded"
+                    style={{ background: `${c}08`, border: `1px solid ${c}12`, color: `${c}99` }}>
+                    {s}
                   </span>
-                ))}
-              </div>
-
-              <StreamColumn items={packetPool} side="left" speed={1600} />
+                )
+              })}
             </div>
-          </motion.div>
+          </div>
 
-          <ConnectionBeam color="#00E5FF" delay={0} />
+          {/* Overlay: Center node */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+            <CentralNode />
+          </div>
 
-          {/* CENTER: AI Processing Pipeline */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="space-y-3">
-              <PipelineNode
-                icon="📥" label="INGEST" sublabel="Parse, normalize, deduplicate"
-                color="#00E5FF"
-                metrics={[{ label: 'Throughput', value: '1,247/min' }, { label: 'Latency', value: '12ms' }]}
-              />
-              <div className="flex justify-center">
-                <motion.div
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                  className="text-[var(--text-muted)] text-xs font-mono"
-                >↓</motion.div>
-              </div>
-              <PipelineNode
-                icon="🧠" label="ANALYZE" sublabel="LLM + Statistical + Ensemble"
-                color="#8B5CF6"
-                metrics={[{ label: 'Models', value: '4 active' }, { label: 'Accuracy', value: '68.3%' }]}
-              />
-              <div className="flex justify-center">
-                <motion.div
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
-                  className="text-[var(--text-muted)] text-xs font-mono"
-                >↓</motion.div>
-              </div>
-              <PipelineNode
-                icon="🎯" label="SIGNAL GEN" sublabel="Edge detection, Kelly sizing"
-                color="#00D77E"
-                metrics={[{ label: 'Signals/hr', value: '47' }, { label: 'Avg Edge', value: '6.2%' }]}
-              />
+          {/* Processing stage labels (around center) */}
+          <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: '60px' }}>
+            <motion.div
+              animate={{ y: [0, -3, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md"
+              style={{ background: 'rgba(0, 229, 255, 0.06)', border: '1px solid rgba(0, 229, 255, 0.1)' }}
+            >
+              <span className="text-sm">📥</span>
+              <span className="text-[9px] font-mono font-bold text-[var(--brand-accent)] tracking-widest">INGEST</span>
+              <span className="text-[8px] font-mono text-[var(--text-muted)]">1,247/min</span>
+            </motion.div>
+          </div>
+
+          <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ bottom: '60px' }}>
+            <motion.div
+              animate={{ y: [0, 3, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md"
+              style={{ background: 'rgba(0, 215, 126, 0.06)', border: '1px solid rgba(0, 215, 126, 0.1)' }}
+            >
+              <span className="text-sm">🎯</span>
+              <span className="text-[9px] font-mono font-bold text-[var(--color-success)] tracking-widest">SIGNAL GEN</span>
+              <span className="text-[8px] font-mono text-[var(--text-muted)]">47 signals/hr</span>
+            </motion.div>
+          </div>
+
+          {/* Overlay: Right labels (signals/output) */}
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-60">
+            <div className="mb-3 flex items-center gap-2 justify-end">
+              <span className="text-[9px] font-mono font-bold text-[var(--color-success)] uppercase tracking-widest">Signals</span>
+              <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> AUTO</span>
             </div>
-          </motion.div>
+            <FloatingLabels items={signalLabels} side="right" />
 
-          <ConnectionBeam color="#00D77E" delay={0.5} />
-
-          {/* RIGHT: Signal Output & Execution */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
-            <div className="glass-card p-4" style={{ borderColor: 'rgba(0, 215, 126, 0.08)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-mono font-bold text-[var(--color-success)] uppercase tracking-widest">Signals & Execution</span>
-                <span className="badge-live text-[8px]"><span className="pulse-dot" style={{ width: 4, height: 4 }} /> AUTO</span>
+            {/* Bot status */}
+            <motion.div
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="mt-3 p-2.5 rounded-md text-right"
+              style={{ background: 'rgba(0, 229, 255, 0.04)', border: '1px solid rgba(0, 229, 255, 0.08)' }}
+            >
+              <div className="flex items-center justify-end gap-1.5 mb-1">
+                <span className="text-[8px] font-mono font-bold text-[var(--brand-accent)] tracking-widest">TRADING BOT</span>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#00D77E', boxShadow: '0 0 6px #00D77E' }} />
               </div>
+              <p className="text-sm font-mono font-bold text-[var(--color-success)]">+$2,847 today</p>
+              <p className="text-[8px] font-mono text-[var(--text-muted)]">12 positions · 71% win</p>
+            </motion.div>
+          </div>
 
-              <StreamColumn items={signalOutputs} side="right" speed={2800} />
-
-              {/* Bot status panel */}
-              <div className="mt-3 p-3 rounded-lg relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.04), rgba(0, 215, 126, 0.04))', border: '1px solid rgba(0, 229, 255, 0.08)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] font-mono font-bold text-[var(--brand-accent)] uppercase tracking-widest">Trading Bot</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#00D77E', boxShadow: '0 0 6px #00D77E' }} />
-                    <span className="text-[9px] font-mono text-[var(--color-success)]">ACTIVE</span>
-                  </div>
+          {/* Bottom metrics bar */}
+          <div className="absolute bottom-0 left-0 right-0 z-10">
+            <div className="flex items-center justify-center gap-8 py-3 border-t border-[var(--border-default)]"
+              style={{ background: 'linear-gradient(to top, var(--bg-primary), transparent)' }}>
+              {[
+                { label: 'Total Latency', value: '<200ms', color: '#00D77E' },
+                { label: 'Events/min', value: '1,247', color: '#00E5FF' },
+                { label: 'Models Active', value: '4', color: '#8B5CF6' },
+                { label: 'Edge Detected', value: '6.2% avg', color: '#FFD166' },
+              ].map(m => (
+                <div key={m.label} className="text-center">
+                  <p className="text-[8px] font-mono text-[var(--text-muted)] uppercase tracking-wider">{m.label}</p>
+                  <p className="text-xs font-mono font-bold" style={{ color: m.color }}>{m.value}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: 'PnL Today', value: '+$2,847', color: '#00D77E' },
-                    { label: 'Positions', value: '12', color: '#00E5FF' },
-                    { label: 'Win Rate', value: '71%', color: '#FFD166' },
-                  ].map(m => (
-                    <div key={m.label} className="text-center">
-                      <p className="text-[8px] font-mono text-[var(--text-muted)] uppercase">{m.label}</p>
-                      <p className="text-xs font-mono font-bold" style={{ color: m.color }}>{m.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
