@@ -1,58 +1,44 @@
 'use client'
 import { motion } from 'framer-motion'
+import { Search, Radio, Zap, Bot } from 'lucide-react'
 
 const modules = [
   {
     title: 'Market Scanner',
     desc: 'Real-time scanning of 1,200+ markets across Polymarket, Kalshi, and more. Instant edge detection with AI fair value.',
-    icon: '🔍',
+    Icon: Search,
     color: '#00E5FF',
     tier: 'FREE',
-    stats: [
-      { label: 'Markets', value: '1,200+' },
-      { label: 'Refresh', value: '<1s' },
-    ],
+    stats: [{ label: 'Markets', value: '1,200+' }, { label: 'Refresh', value: '<1s' }],
   },
   {
     title: 'Signal Board',
     desc: 'AI-generated trading signals with confidence scores, Kelly sizing, and multi-model ensemble agreement.',
-    icon: '📡',
+    Icon: Radio,
     color: '#8B5CF6',
     tier: 'PRO',
-    stats: [
-      { label: 'Signals/day', value: '340+' },
-      { label: 'Win Rate', value: '68%' },
-    ],
+    stats: [{ label: 'Signals/day', value: '340+' }, { label: 'Win Rate', value: '68%' }],
   },
   {
     title: 'Arbitrage Engine',
     desc: 'Cross-platform price discrepancy detection. Auto-calculate risk-free returns across prediction markets.',
-    icon: '⚡',
+    Icon: Zap,
     color: '#FFD166',
     tier: 'PRO+',
-    stats: [
-      { label: 'Platforms', value: '4' },
-      { label: 'Avg Spread', value: '2.3%' },
-    ],
+    stats: [{ label: 'Platforms', value: '4' }, { label: 'Avg Spread', value: '2.3%' }],
   },
   {
     title: 'Trading Bot',
     desc: 'Fully automated execution. Kelly-optimal sizing, portfolio constraints, and real-time risk management.',
-    icon: '🤖',
+    Icon: Bot,
     color: '#00D77E',
     tier: 'ENTERPRISE',
-    stats: [
-      { label: 'Execution', value: '<50ms' },
-      { label: 'Uptime', value: '99.9%' },
-    ],
+    stats: [{ label: 'Execution', value: '<50ms' }, { label: 'Uptime', value: '99.9%' }],
   },
 ]
 
 const tierColors: Record<string, string> = {
-  FREE: '#00D77E',
-  PRO: '#8B5CF6',
-  'PRO+': '#FFD166',
-  ENTERPRISE: '#00E5FF',
+  FREE: '#00D77E', PRO: '#8B5CF6', 'PRO+': '#FFD166', ENTERPRISE: '#00E5FF',
 }
 
 export function ModuleShowcase() {
@@ -90,9 +76,13 @@ export function ModuleShowcase() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center relative"
                     style={{ background: `${mod.color}08`, border: `1px solid ${mod.color}15` }}>
-                    {mod.icon}
+                    <mod.Icon size={24} strokeWidth={1.6} color={mod.color} />
+                    <div className="absolute inset-0 rounded-lg overflow-hidden">
+                      <div className="absolute -top-1/2 -left-1/2 w-full h-full rotate-12 opacity-10"
+                        style={{ background: `linear-gradient(180deg, ${mod.color}, transparent)` }} />
+                    </div>
                   </div>
                   <div>
                     <h3 className="text-base font-display font-semibold">{mod.title}</h3>
@@ -115,7 +105,6 @@ export function ModuleShowcase() {
                 ))}
               </div>
 
-              {/* Bottom line glow */}
               <div className="absolute bottom-0 left-6 right-6 h-[1px] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 style={{ background: `linear-gradient(90deg, transparent, ${mod.color}40, transparent)` }} />
             </motion.div>

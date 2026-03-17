@@ -1,12 +1,13 @@
 'use client'
 import { motion } from 'framer-motion'
+import { Plug, Brain, Crosshair } from 'lucide-react'
 
 const steps = [
   {
     num: '01',
     title: 'Connect Data Sources',
     desc: 'Plug into 1,200+ prediction markets, news feeds, social signals, and on-chain data. Zero config for major platforms.',
-    icon: '🔌',
+    Icon: Plug,
     color: '#00E5FF',
     details: ['Polymarket', 'Kalshi', 'Reuters', 'Twitter/X', 'On-chain'],
   },
@@ -14,7 +15,7 @@ const steps = [
     num: '02',
     title: 'AI Analyzes Everything',
     desc: 'Multi-model ensemble (LLM + statistical + sentiment) processes every data point. Finds edges humans miss.',
-    icon: '🧠',
+    Icon: Brain,
     color: '#8B5CF6',
     details: ['GPT-4 Turbo', 'Bayesian models', 'NLP sentiment', 'Volume analysis'],
   },
@@ -22,7 +23,7 @@ const steps = [
     num: '03',
     title: 'Get Actionable Signals',
     desc: 'Receive precise trading signals with Kelly-optimal sizing. Auto-execute or review manually.',
-    icon: '🎯',
+    Icon: Crosshair,
     color: '#00D77E',
     details: ['Edge %', 'Kelly fraction', 'Confidence', 'Risk score'],
   },
@@ -57,14 +58,13 @@ export function HowItWorks() {
               whileHover={{ y: -4 }}
               className="glass-card p-6 relative group"
             >
-              {/* Number watermark */}
               <span className="absolute top-4 right-4 text-4xl font-display font-bold opacity-[0.04]"
                 style={{ color: step.color }}>{step.num}</span>
 
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center"
                   style={{ background: `${step.color}10`, border: `1px solid ${step.color}20` }}>
-                  {step.icon}
+                  <step.Icon size={20} strokeWidth={1.8} color={step.color} />
                 </div>
                 <span className="text-[10px] font-mono font-bold tracking-widest" style={{ color: step.color }}>
                   STEP {step.num}
@@ -83,7 +83,6 @@ export function HowItWorks() {
                 ))}
               </div>
 
-              {/* Bottom glow on hover */}
               <div className="absolute bottom-0 left-4 right-4 h-[1px] opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ background: `linear-gradient(90deg, transparent, ${step.color}40, transparent)` }} />
             </motion.div>

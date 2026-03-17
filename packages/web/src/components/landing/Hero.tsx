@@ -1,5 +1,6 @@
 'use client'
 import { motion } from 'framer-motion'
+import { Activity, Gauge, TrendingUp, Signal } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -182,12 +183,13 @@ export function Hero() {
             className="mt-16 grid grid-cols-4 gap-4 max-w-2xl mx-auto"
           >
             {[
-              { label: 'Markets Tracked', value: '1,200+', color: '#8B5CF6' },
-              { label: 'Avg Latency', value: '<200ms', color: '#00E5FF' },
-              { label: 'Win Rate', value: '68.3%', color: '#00D77E' },
-              { label: 'Daily Signals', value: '340+', color: '#FFD166' },
+              { label: 'Markets Tracked', value: '1,200+', color: '#8B5CF6', Icon: Activity },
+              { label: 'Avg Latency', value: '<200ms', color: '#00E5FF', Icon: Gauge },
+              { label: 'Win Rate', value: '68.3%', color: '#00D77E', Icon: TrendingUp },
+              { label: 'Daily Signals', value: '340+', color: '#FFD166', Icon: Signal },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
+                <stat.Icon size={16} strokeWidth={1.8} color={stat.color} className="mx-auto mb-1 opacity-60" />
                 <p className="text-lg md:text-2xl font-mono font-bold" style={{ color: stat.color }}>{stat.value}</p>
                 <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider mt-1">{stat.label}</p>
               </div>
