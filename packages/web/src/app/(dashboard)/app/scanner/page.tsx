@@ -1,9 +1,9 @@
 import { KPICard } from '@/components/dashboard/KPICard'
 import { MarketTable } from '@/components/dashboard/MarketTable'
-import { mockMarkets, getMarketWithEdge } from '@/lib/mock-data/markets'
+import { fetchMarketsWithSignals } from '@/lib/api'
 
-export default function ScannerPage() {
-  const marketsWithEdge = mockMarkets.map(getMarketWithEdge)
+export default async function ScannerPage() {
+  const marketsWithEdge = await fetchMarketsWithSignals(50)
   const edgeMarkets = marketsWithEdge.filter(m => Math.abs(m.edge) > 5)
   const hotMarkets = marketsWithEdge.filter(m => m.volume24h > 3_000_000)
 
@@ -15,7 +15,7 @@ export default function ScannerPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <KPICard title="Active Markets" value={mockMarkets.length} change={3.2} />
+        <KPICard title="Active Markets" value={marketsWithEdge.length} change={3.2} />
         <KPICard title="Edge > 5%" value={edgeMarkets.length} change={12.5} />
         <KPICard title="Hot Markets" value={hotMarkets.length} change={-2.1} />
       </div>
