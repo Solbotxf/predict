@@ -35,17 +35,23 @@ function LiveTicker() {
 }
 
 function FloatingParticles() {
-  const [particles] = useState(() => 
-    Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 1 + Math.random() * 2,
-      duration: 3 + Math.random() * 4,
-      delay: Math.random() * 3,
-      color: ['#8B5CF6', '#00E5FF', '#00D77E', '#FFD166'][Math.floor(Math.random() * 4)],
-    }))
-  )
+  const [particles, setParticles] = useState<Array<{id:number;x:number;y:number;size:number;duration:number;delay:number;color:string}>>([])
+
+  useEffect(() => {
+    setParticles(
+      Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: 1 + Math.random() * 2,
+        duration: 3 + Math.random() * 4,
+        delay: Math.random() * 3,
+        color: ['#8B5CF6', '#00E5FF', '#00D77E', '#FFD166'][Math.floor(Math.random() * 4)],
+      }))
+    )
+  }, [])
+
+  if (particles.length === 0) return null
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
