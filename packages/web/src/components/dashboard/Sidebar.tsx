@@ -2,15 +2,19 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import {
+  LayoutDashboard, Search, Radio, ArrowLeftRight,
+  PieChart, FlaskConical, Bell, ChevronRight
+} from 'lucide-react'
 
 const navItems = [
-  { href: '/app', label: 'Command Center', icon: '⚡', badge: '' },
-  { href: '/app/scanner', label: 'Market Scanner', icon: '🔍', badge: '8' },
-  { href: '/app/signals', label: 'Signal Board', icon: '📡', badge: '5' },
-  { href: '/app/arbitrage', label: 'Arbitrage', icon: '💱', badge: '' },
-  { href: '/app/portfolio', label: 'Portfolio', icon: '📊', badge: '' },
-  { href: '/app/backtest', label: 'Backtest', icon: '🧪', badge: '' },
-  { href: '/app/alerts', label: 'Alerts', icon: '🔔', badge: '3' },
+  { href: '/app', label: 'Command Center', Icon: LayoutDashboard, badge: '' },
+  { href: '/app/scanner', label: 'Market Scanner', Icon: Search, badge: '8' },
+  { href: '/app/signals', label: 'Signal Board', Icon: Radio, badge: '5' },
+  { href: '/app/arbitrage', label: 'Arbitrage', Icon: ArrowLeftRight, badge: '' },
+  { href: '/app/portfolio', label: 'Portfolio', Icon: PieChart, badge: '' },
+  { href: '/app/backtest', label: 'Backtest', Icon: FlaskConical, badge: '' },
+  { href: '/app/alerts', label: 'Alerts', Icon: Bell, badge: '3' },
 ]
 
 export function Sidebar() {
@@ -18,7 +22,6 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 border-r border-[var(--border-default)] bg-[var(--bg-secondary)] flex flex-col h-screen sticky top-0">
-      {/* Logo */}
       <div className="p-4 border-b border-[var(--border-default)]">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-[10px]"
@@ -29,7 +32,6 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* System status */}
       <div className="px-4 py-3 border-b border-[var(--border-default)]">
         <div className="flex items-center gap-2">
           <span className="pulse-dot" style={{ width: 6, height: 6 }} />
@@ -37,7 +39,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 p-2 space-y-0.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/app' && pathname.startsWith(item.href))
@@ -46,7 +47,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center justify-between px-3 py-2 rounded-md text-xs font-mono transition-all',
+                'flex items-center justify-between px-3 py-2 rounded-md text-xs font-mono transition-all group',
                 isActive
                   ? 'text-[var(--brand-accent)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.03]'
@@ -54,20 +55,21 @@ export function Sidebar() {
               style={isActive ? { background: 'rgba(0, 229, 255, 0.06)', border: '1px solid rgba(0, 229, 255, 0.1)' } : {}}
             >
               <div className="flex items-center gap-2.5">
-                <span className="text-sm">{item.icon}</span>
+                <item.Icon size={15} strokeWidth={isActive ? 2 : 1.6} />
                 <span className="uppercase tracking-wider">{item.label}</span>
               </div>
-              {item.badge && (
+              {item.badge ? (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-[var(--text-muted)]">
                   {item.badge}
                 </span>
+              ) : (
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-40 transition-opacity" />
               )}
             </Link>
           )
         })}
       </nav>
 
-      {/* Footer */}
       <div className="p-3 border-t border-[var(--border-default)] text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
         PredictEdge v0.1.0
       </div>
