@@ -34,7 +34,7 @@ function transformMarket(m: BackendMarket): Market & { fairValue: number; edge: 
     id: m.id, title: m.title, description: '', source: m.source as Market['source'],
     category: m.category, currentPrice: m.current_price, previousPrice: m.current_price,
     volume24h: m.volume_24h, liquidity: m.liquidity, endDate: m.end_date || '',
-    resolution: 'open', fairValue: m.current_price, edge: 0,
+    resolution: 'open', fairValue: m.current_price, edge: 0, url: m.url || '', url: m.url || '',
   }
 }
 
@@ -69,7 +69,7 @@ export async function fetchMarkets(limit = 50): Promise<(Market & { fairValue: n
 export async function fetchSignals(limit = 20): Promise<Signal[]> {
   if (!isBackendEnabled()) return mockSignals
   try {
-    const res = await fetch(`${API_URL}/api/signals?limit=${limit}`, { next: { revalidate: 60 } })
+    const res = await fetch(`${API_URL}/api/signals?limit=10`, { next: { revalidate: 60 } })
     if (!res.ok) throw new Error(`API ${res.status}`)
     return (await res.json() as BackendSignal[]).map(transformSignal)
   } catch (err) {
