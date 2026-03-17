@@ -7,7 +7,7 @@ import Link from 'next/link'
 import {
   Activity, Gauge, TrendingUp, Signal, Database,
   Cpu, Brain, Crosshair, Bot, ChevronRight,
-  ArrowUpRight, ArrowDownRight, Clock, Zap
+  ArrowUpRight, ArrowDownRight, Clock, Zap, LayoutDashboard
 } from 'lucide-react'
 
 /* ─── Pipeline mini-visualization (horizontal strip) ─── */
