@@ -105,3 +105,34 @@ export async function fetchMarketsWithSignals(limit = 50): Promise<(Market & { f
     return mockMarkets.map(getMarketWithEdge)
   }
 }
+
+export interface InsightMarket {
+  id: string; source: string; title: string; category: string
+  current_price: number; volume_24h: number; liquidity: number
+  url: string; end_date: string | null; image: string
+}
+
+export interface MarketInsights {
+  total_markets: number
+  active_markets: number
+  hot: InsightMarket[]
+  expiring_soon: InsightMarket[]
+  expiring_month: InsightMarket[]
+  locked_in: InsightMarket[]
+  contested: InsightMarket[]
+  edge_potential: InsightMarket[]
+  categories: Array<{ name: string; count: number; total_volume: number; avg_price: number }>
+  all: InsightMarket[]
+}
+
+export async function fetchInsights(): Promise<MarketInsights | null> {
+  if (!isBackendEnabled()) return null
+  try {
+    const res = await fetch(`${API_URL}/api/markets/insights`, { next: { revalidate: 60 } })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Insights fetch failed:', err)
+    return null
+  }
+}

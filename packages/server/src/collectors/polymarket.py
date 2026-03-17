@@ -73,6 +73,11 @@ class PolymarketCollector(BaseCollector):
                     metadata={
                         "token_id": m.get("clobTokenIds", ""),
                         "outcomes": m.get("outcomes", ""),
+                        "volume_total": float(m.get("volumeNum", 0)),
+                        "competitive": float(m.get("events", [{}])[0].get("competitive", 0)) if m.get("events") else 0,
+                        "image": m.get("image", ""),
+                        "start_date": m.get("startDateIso", ""),
+                        "closed": m.get("closed", False),
                     },
                 ))
             except Exception as e:
