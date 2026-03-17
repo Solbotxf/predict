@@ -19,8 +19,8 @@ collectors:
 analyzers:
   llm_prob:
     enabled: true
-    provider: "anthropic"   # "anthropic" | "openai"
-    model: "claude-3-haiku-20240307"
+    provider: "openai"   # "anthropic" | "openai"
+    model: "gpt-4o-mini"
     cache_ttl: 3600         # seconds
   kelly:
     enabled: true
