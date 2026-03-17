@@ -69,7 +69,7 @@ class PolymarketCollector(BaseCollector):
                     volume_24h=float(m.get("volume24hr", 0)),
                     liquidity=float(m.get("liquidityNum", 0)),
                     end_date=datetime.fromisoformat(m["endDate"].replace("Z", "+00:00")) if m.get("endDate") else None,
-                    url=f"https://polymarket.com/event/{m.get('slug', '')}",
+                    url=f"https://polymarket.com/event/{m.get('events', [{}])[0].get('slug', m.get('slug', ''))}",
                     metadata={
                         "token_id": m.get("clobTokenIds", ""),
                         "outcomes": m.get("outcomes", ""),
