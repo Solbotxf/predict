@@ -22,6 +22,9 @@ def create_store(settings: Settings) -> BaseStore:
         case "sqlite":
             from src.pipeline.sqlite_store import SQLiteStore
             return SQLiteStore(settings.pipeline.sqlite_path)
+        case "postgres" | "postgresql":
+            from src.pipeline.pg_store import PostgresStore
+            return PostgresStore(settings.pipeline.database_url)
         # case "timescale":
         #     from src.pipeline.timescale_store import TimescaleStore
         #     return TimescaleStore(settings.timescale_url)

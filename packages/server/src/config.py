@@ -16,6 +16,7 @@ class PipelineConfig(BaseModel):
     bus: str = "simple"
     store: str = "sqlite"
     sqlite_path: str = "data/pmt.db"
+    database_url: str = ""  # PostgreSQL connection string
 
 class PolymarketConfig(BaseModel):
     enabled: bool = True
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
     # API keys from env
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    database_url: str = ""  # Convenience: also accepted at top level
 
     model_config = {"env_prefix": "PMT_", "env_nested_delimiter": "__"}
 

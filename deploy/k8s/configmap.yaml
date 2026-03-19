@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: predict-config
+  namespace: predict
+data:
+  PMT_ENV: "production"
+  PMT_SERVER__HOST: "0.0.0.0"
+  PMT_SERVER__PORT: "8000"
+  PMT_PIPELINE__STORE: "postgres"
+  PMT_PIPELINE__BUS: "simple"
+  PMT_ANALYZERS__LLM_PROB__PROVIDER: "openai"
+  PMT_ANALYZERS__LLM_PROB__MODEL: "gpt-4o-mini"
+  PMT_COLLECTORS__POLYMARKET__POLL_INTERVAL: "30"
+  # Frontend API URL — adjust to your actual domain
+  NEXT_PUBLIC_API_URL: "https://predict-api.yourdomain.com"

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import load_settings
 from src.collectors.polymarket import PolymarketCollector
-from src.pipeline.sqlite_store import SQLiteStore
+from src.factory import create_store
 from src.analyzers.llm_prob import LLMProbAnalyzer
 from src.analyzers.kelly import KellySizer
 from src.engine.signal_engine import SignalEngine
@@ -18,7 +18,12 @@ logger = logging.getLogger(__name__)
 
 # Globals (initialized in lifespan)
 settings = load_settings()
-store = SQLiteStore(settings.pipeline.sqlite_path)
+# Use DATABASE_URL env var if set, override config
+import os
+if os.environ.get("DATABASE_URL") and not settings.pipeline.database_url:
+    settings.pipeline.database_url = os.environ["DATABASE_URL"]
+    settings.pipeline.store = "postgres"
+store = create_store(settings)
 collector = PolymarketCollector(settings.collectors.polymarket)
 llm_analyzer = LLMProbAnalyzer(settings.analyzers.llm_prob)
 kelly = KellySizer(settings.analyzers.kelly)

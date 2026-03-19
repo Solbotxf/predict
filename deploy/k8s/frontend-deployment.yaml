@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predict-frontend
+  namespace: predict
+  labels:
+    app: predict-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: predict-frontend
+  template:
+    metadata:
+      labels:
+        app: predict-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: YOUR_REGISTRY/predict-frontend:latest  # TODO: replace
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: predict-config
+                  key: NEXT_PUBLIC_API_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10

@@ -6,3 +6,5 @@ dist
 *.tsbuildinfo
 packages/server/.env
 packages/server/data/
+deploy/k8s/secret.yaml
+**/__pycache__/

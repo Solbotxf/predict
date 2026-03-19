@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: predict-collector
+  namespace: predict
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: collector
+              image: YOUR_REGISTRY/predict-backend:latest  # Same image as backend
+              command: ["python", "scripts/collect.py"]
+              envFrom:
+                - configMapRef:
+                    name: predict-config
+                - secretRef:
+                    name: predict-secrets
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+          restartPolicy: OnFailure
