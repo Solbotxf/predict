@@ -293,6 +293,69 @@ async def event_timeline(
             }],
         })
 
+    # Inject recent news events with market associations
+    try:
+        import re as _re
+        news_categories = {"geopolitics": "Geopolitics", "economy": "Economics",
+                          "crypto": "Crypto", "tech": "Technology",
+                          "climate": "Climate", "politics_us": "US Politics"}
+        seen_news = set()
+        for source in ["gdelt", "rss"]:
+            for cat_key, cat_label in news_categories.items():
+                events = await store.query_events(f"{source}-{cat_key}", limit=10)
+                for ev in events:
+                    p = ev.payload
+                    title = p.get("title", "")
+                    if not title:
+                        continue
+                    title_key = _re.sub(r"\W+", " ", title.lower()).strip()[:60]
+                    if title_key in seen_news:
+                        continue
+                    seen_news.add(title_key)
+
+                    # Find related markets
+                    title_lower = title.lower()
+                    news_words = set(_re.findall(r"\b[a-z]{4,}\b", title_lower))
+                    related = []
+                    for m in markets:
+                        m_words = set(_re.findall(r"\b[a-z]{4,}\b", m.title.lower()))
+                        overlap = news_words & m_words
+                        if len(overlap) >= 2:
+                            score = len(overlap) / max(len(news_words), 1)
+                            related.append({
+                                "id": m.id, "title": m.title,
+                                "current_price": m.current_price,
+                                "volume_24h": m.volume_24h,
+                                "liquidity": m.liquidity,
+                                "url": m.url,
+                                "end_date": m.end_date.isoformat() if m.end_date else None,
+                                "match_score": round(min(score, 1.0), 2),
+                            })
+                    related.sort(key=lambda x: -x["match_score"])
+
+                    pub_time = p.get("published") or p.get("seen_date") or ev.timestamp.isoformat()
+                    timeline.append({
+                        "event_id": f"news-{hash(title_key) % 100000}",
+                        "event_name": title[:150],
+                        "home_team": "",
+                        "away_team": "",
+                        "event_time": pub_time if isinstance(pub_time, str) else str(pub_time),
+                        "league": cat_label,
+                        "sport": "News",
+                        "venue": p.get("source", source),
+                        "status": "news",
+                        "home_score": None,
+                        "away_score": None,
+                        "market_count": len(related[:5]),
+                        "total_volume": sum(x["volume_24h"] for x in related[:5]),
+                        "markets": related[:5],
+                        "news_url": p.get("url", ""),
+                        "news_category": cat_key,
+                    })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"News injection into timeline failed: {e}")
+
     # Sort by time
     timeline.sort(key=lambda x: x["event_time"])
 

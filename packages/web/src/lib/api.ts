@@ -167,6 +167,7 @@ export async function fetchTimeline(sport?: string, days = 3): Promise<TimelineD
 
 // Updated types for ESPN-enriched timeline
 export interface TimelineEventV2 {
+  news_url?: string; news_category?: string
   event_id: string; event_name: string; home_team: string; away_team: string
   event_time: string; league: string; sport: string; venue: string
   status: string; home_score: number | null; away_score: number | null

@@ -5,7 +5,7 @@ import type { TimelineDataV2, TimelineEventV2 } from '@/lib/api'
 import {
   Calendar, Clock, ExternalLink, ChevronDown, ChevronUp,
   Activity, DollarSign, MapPin, Trophy,
-  Globe, Gamepad2, Vote, Landmark, Bitcoin, Zap, Timer
+  Globe, Gamepad2, Vote, Landmark, Bitcoin, Zap, Timer, Newspaper
 } from 'lucide-react'
 
 /* ─── League config ─── */
@@ -31,6 +31,9 @@ const leagueConfig: Record<string, { color: string; emoji: string }> = {
   Geopolitics:{ color: '#FF9F43', emoji: '🌍' },
   Crypto:     { color: '#F7931A', emoji: '₿' },
   Technology: { color: '#00E5FF', emoji: '🤖' },
+  'News':       { color: '#A78BFA', emoji: '📰' },
+  'US Politics': { color: '#3B82F6', emoji: '🏛️' },
+  'Climate':    { color: '#10B981', emoji: '🌿' },
 }
 
 function cfg(league: string) {
@@ -85,6 +88,7 @@ function EventNode({ event, index }: { event: TimelineEventV2; index: number }) 
   const c = cfg(event.league)
   const hasTeams = event.home_team && event.away_team
   const isLive = event.status === 'in'
+  const isNews = event.sport === 'News'
 
   return (
     <motion.div initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.03 }}
@@ -131,6 +135,12 @@ function EventNode({ event, index }: { event: TimelineEventV2; index: number }) 
                     </span>
                   )}
                 </div>
+              ) : isNews && event.news_url ? (
+                <a href={event.news_url} target="_blank" rel="noopener noreferrer"
+                   className="text-[12px] font-bold text-[var(--text-primary)] leading-snug line-clamp-2 hover:text-cyan-400 transition-colors group/title">
+                  {event.event_name}
+                  <ExternalLink size={10} className="inline ml-1 opacity-0 group-hover/title:opacity-60" />
+                </a>
               ) : (
                 <p className="text-[12px] font-bold text-[var(--text-primary)] leading-snug line-clamp-2">
                   {event.event_name}
@@ -139,8 +149,14 @@ function EventNode({ event, index }: { event: TimelineEventV2; index: number }) 
 
               {event.venue && (
                 <div className="flex items-center gap-1 mt-0.5">
-                  <MapPin size={8} className="text-[var(--text-muted)]" />
+                  {isNews ? <Newspaper size={8} className="text-[var(--text-muted)]" /> : <MapPin size={8} className="text-[var(--text-muted)]" />}
                   <span className="text-[8px] font-mono text-[var(--text-muted)]">{event.venue}</span>
+                  {isNews && event.news_url && (
+                    <a href={event.news_url} target="_blank" rel="noopener noreferrer"
+                       className="text-[8px] font-mono text-cyan-400/60 hover:text-cyan-400 ml-1 flex items-center gap-0.5">
+                      source <ExternalLink size={7} />
+                    </a>
+                  )}
                 </div>
               )}
             </div>
@@ -260,7 +276,7 @@ export function TimelineClient({ initialData }: { initialData: TimelineDataV2 | 
             <h1 className="text-lg font-display font-bold tracking-wide">Event Timeline</h1>
           </div>
           <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-wider mt-0.5 ml-[26px]">
-            ESPN fixtures × Polymarket · {(initialData.total_events || 0)} events · {(initialData.total_with_markets || 0)} with markets
+            ESPN × News × Polymarket · {(initialData.total_events || 0)} events · {(initialData.total_with_markets || 0)} with markets
           </p>
         </div>
         <div className="flex items-center gap-2">
