@@ -164,3 +164,30 @@ export async function fetchTimeline(sport?: string, days = 3): Promise<TimelineD
     return null
   }
 }
+
+// Updated types for ESPN-enriched timeline
+export interface TimelineEventV2 {
+  event_id: string; event_name: string; home_team: string; away_team: string
+  event_time: string; league: string; sport: string; venue: string
+  status: string; home_score: number | null; away_score: number | null
+  total_volume: number; market_count: number; markets: TimelineMarket[]
+}
+
+export interface TimelineDataV2 {
+  events: TimelineEventV2[]; total_events: number; total_with_markets: number
+  leagues: string[]; sports: string[]
+}
+
+export async function fetchTimelineV2(league?: string, days = 3): Promise<TimelineDataV2 | null> {
+  if (!isBackendEnabled()) return null
+  try {
+    const params = new URLSearchParams({ days: String(days) })
+    if (league && league !== 'All') params.set('league', league)
+    const res = await fetch(`${API_URL}/api/events/timeline?${params}`, { next: { revalidate: 120 } })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Timeline V2 fetch failed:', err)
+    return null
+  }
+}
