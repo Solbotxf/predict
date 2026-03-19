@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   Activity, LayoutDashboard, Search, Radio, ArrowLeftRight,
   PieChart, FlaskConical, Bell, ChevronRight, Database,
-  Brain, Target, Bot, Key, Settings, Calendar
+  Brain, Target, Bot, Key, Settings, Calendar, Newspaper
 } from 'lucide-react'
 
 const mainNav = [
@@ -27,6 +27,7 @@ const dataNav = [
   { href: '/app/analysis', label: 'AI Analysis', Icon: Brain, badge: '' },
   { href: '/app/value', label: 'Value Capture', Icon: Target, badge: '' },
   { href: '/app/timeline', label: 'Event Timeline', Icon: Calendar, badge: '' },
+  { href: '/app/news', label: 'News Intelligence', Icon: Newspaper, badge: '' },
 ]
 
 function NavSection({ label, items }: { label: string; items: typeof mainNav }) {

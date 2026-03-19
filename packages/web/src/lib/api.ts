@@ -34,7 +34,7 @@ function transformMarket(m: BackendMarket): Market & { fairValue: number; edge: 
     id: m.id, title: m.title, description: '', source: m.source as Market['source'],
     category: m.category, currentPrice: m.current_price, previousPrice: m.current_price,
     volume24h: m.volume_24h, liquidity: m.liquidity, endDate: m.end_date || '',
-    resolution: 'open', fairValue: m.current_price, edge: 0, url: m.url || '', url: m.url || '',
+    resolution: 'open', fairValue: m.current_price, edge: 0, url: m.url || '',
   }
 }
 
@@ -188,6 +188,49 @@ export async function fetchTimelineV2(league?: string, days = 3): Promise<Timeli
     return await res.json()
   } catch (err) {
     console.error('Timeline V2 fetch failed:', err)
+    return null
+  }
+}
+
+// --- News Feed ---
+export interface NewsArticle {
+  title: string; url: string; source: string; category: string
+  timestamp: string | null; tone: number | null; country: string | null
+  related_markets: { id: string; title: string; current_price: number; volume_24h: number; url: string; relevance: number }[]
+}
+
+export interface NewsData {
+  news: NewsArticle[]; total: number; categories: string[]
+}
+
+export async function fetchNews(opts?: { category?: string; withMarkets?: boolean; limit?: number }): Promise<NewsData | null> {
+  if (!isBackendEnabled()) return null
+  try {
+    const params = new URLSearchParams()
+    if (opts?.category && opts.category !== 'all') params.set('category', opts.category)
+    if (opts?.withMarkets) params.set('with_markets', 'true')
+    if (opts?.limit) params.set('limit', String(opts.limit))
+    const res = await fetch(`${API_URL}/api/news?${params}`, { next: { revalidate: 120 } })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.error('News fetch failed:', err)
+    return null
+  }
+}
+
+export interface DataSource {
+  name: string; type: string; api_key: boolean; feed_count?: number
+}
+
+export async function fetchDataSources(): Promise<Record<string, DataSource> | null> {
+  if (!isBackendEnabled()) return null
+  try {
+    const res = await fetch(`${API_URL}/api/data-sources`, { next: { revalidate: 300 } })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = await res.json()
+    return data.sources
+  } catch {
     return null
   }
 }

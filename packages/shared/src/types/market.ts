@@ -23,6 +23,7 @@ export interface Market {
   liquidity: number
   endDate: string
   resolution: 'open' | 'yes' | 'no'
+  url?: string
 }
 
 export interface Signal {
