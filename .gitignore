@@ -8,3 +8,4 @@ packages/server/.env
 packages/server/data/
 deploy/k8s/secret.yaml
 **/__pycache__/
+packages/server/scripts/seeds/data/
