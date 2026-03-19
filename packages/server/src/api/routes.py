@@ -306,3 +306,98 @@ async def event_timeline(
         "leagues": all_leagues,
         "sports": sorted(set(e["sport"] for e in timeline)),
     }
+
+
+@router.get("/news")
+async def news_feed(
+    category: str = Query("all", description="Filter by category"),
+    limit: int = Query(50, le=200),
+    with_markets: bool = Query(False, description="Only return news linked to markets"),
+):
+    """News feed with prediction market associations."""
+    from src.api.app import store
+    import re
+
+    # Fetch news events from store
+    news_events = []
+    for source in ["gdelt", "rss"]:
+        for cat in ["geopolitics", "economy", "crypto", "tech", "climate", "politics_us"]:
+            events = await store.query_events(f"{source}-{cat}", limit=30)
+            for ev in events:
+                p = ev.payload
+                news_events.append({
+                    "title": p.get("title", ""),
+                    "url": p.get("url", ""),
+                    "source": p.get("source", p.get("feed_url", "").split("/")[2] if "feed_url" in p else source),
+                    "category": p.get("category", cat),
+                    "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+                    "tone": p.get("tone"),
+                    "country": p.get("source_country"),
+                })
+
+    if category != "all":
+        news_events = [n for n in news_events if n["category"] == category]
+
+    # Deduplicate by title similarity
+    seen_titles = set()
+    unique_news = []
+    for n in news_events:
+        key = re.sub(r'\W+', ' ', n["title"].lower()).strip()[:60]
+        if key not in seen_titles:
+            seen_titles.add(key)
+            unique_news.append(n)
+    news_events = unique_news
+
+    # Associate with prediction markets
+    markets = await store.query_markets(limit=200)
+
+    def find_related_markets(title: str) -> list[dict]:
+        title_lower = title.lower()
+        related = []
+        for m in markets:
+            m_title = m.title.lower()
+            news_words = set(re.findall(r'\b[a-z]{4,}\b', title_lower))
+            market_words = set(re.findall(r'\b[a-z]{4,}\b', m_title))
+            overlap = news_words & market_words
+            if len(overlap) >= 2:
+                score = len(overlap) / max(len(news_words), 1)
+                related.append({
+                    "id": m.id, "title": m.title,
+                    "current_price": m.current_price,
+                    "volume_24h": m.volume_24h,
+                    "url": m.url,
+                    "relevance": round(min(score, 1.0), 2),
+                })
+        return sorted(related, key=lambda x: -x["relevance"])[:5]
+
+    for n in news_events:
+        n["related_markets"] = find_related_markets(n["title"])
+
+    if with_markets:
+        news_events = [n for n in news_events if n["related_markets"]]
+
+    news_events.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+
+    categories = sorted(set(n["category"] for n in news_events))
+
+    return {
+        "news": news_events[:limit],
+        "total": len(news_events),
+        "categories": categories,
+    }
+
+
+@router.get("/data-sources")
+async def data_sources():
+    """List all active data sources and their status."""
+    sources = {
+        "polymarket": {"name": "Polymarket", "type": "prediction_market", "api_key": False},
+        "kalshi": {"name": "Kalshi", "type": "prediction_market", "api_key": False},
+        "espn": {"name": "ESPN", "type": "sports", "api_key": False},
+        "coingecko": {"name": "CoinGecko", "type": "crypto", "api_key": False},
+        "gdelt": {"name": "GDELT", "type": "news", "api_key": False},
+        "rss": {"name": "RSS Feeds (15 sources)", "type": "news", "api_key": False},
+        "usgs": {"name": "USGS Earthquakes", "type": "natural", "api_key": False},
+        "fred": {"name": "FRED Economic Data", "type": "economic", "api_key": True},
+    }
+    return {"sources": sources, "total": len(sources)}

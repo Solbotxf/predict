@@ -4,7 +4,7 @@ metadata:
   name: predict-collector
   namespace: predict
 spec:
-  schedule: "*/5 * * * *"  # Every 5 minutes
+  schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:
@@ -12,8 +12,9 @@ spec:
         spec:
           containers:
             - name: collector
-              image: YOUR_REGISTRY/predict-backend:latest  # Same image as backend
-              command: ["python", "scripts/collect.py"]
+              image: YOUR_REGISTRY/predict-backend:latest
+              command: ["python", "scripts/seeds/seed_all.py"]
+              workingDir: /app
               envFrom:
                 - configMapRef:
                     name: predict-config
@@ -21,9 +22,9 @@ spec:
                     name: predict-secrets
               resources:
                 requests:
-                  cpu: 50m
-                  memory: 128Mi
-                limits:
-                  cpu: 200m
+                  cpu: 100m
                   memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
           restartPolicy: OnFailure
