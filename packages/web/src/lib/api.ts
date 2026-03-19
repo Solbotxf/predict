@@ -136,3 +136,31 @@ export async function fetchInsights(): Promise<MarketInsights | null> {
     return null
   }
 }
+
+export interface TimelineMarket {
+  id: string; title: string; current_price: number; volume_24h: number
+  liquidity: number; url: string; end_date: string; sport: string; category: string
+}
+
+export interface TimelineEvent {
+  event_key: string; event_name: string; event_time: string; sport: string
+  total_volume: number; market_count: number; markets: TimelineMarket[]
+}
+
+export interface TimelineData {
+  events: TimelineEvent[]; total_events: number; sports: string[]
+}
+
+export async function fetchTimeline(sport?: string, days = 3): Promise<TimelineData | null> {
+  if (!isBackendEnabled()) return null
+  try {
+    const params = new URLSearchParams({ days: String(days) })
+    if (sport && sport !== 'All') params.set('sport', sport)
+    const res = await fetch(`${API_URL}/api/events/timeline?${params}`, { next: { revalidate: 120 } })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Timeline fetch failed:', err)
+    return null
+  }
+}

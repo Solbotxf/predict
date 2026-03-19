@@ -160,3 +160,123 @@ async def platform_stats():
         "avg_volume": sum(m.volume_24h for m in markets) / len(markets) if markets else 0,
         "total_volume": sum(m.volume_24h for m in markets),
     }
+
+
+@router.get("/events/timeline")
+async def event_timeline(
+    sport: str | None = None,
+    days: int = Query(3, le=14),
+):
+    """Event timeline — group markets by event, sorted by time."""
+    from src.api.app import collector
+    from datetime import datetime, timedelta, timezone
+    import re
+
+    markets = await collector.fetch_markets(limit=200)
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=days)
+
+    # Classify sport from event slug
+    def classify(m):
+        events = m.metadata.get("token_id", "")  # not useful
+        slug = m.url.split("/event/")[-1] if "/event/" in m.url else ""
+        title = m.title.lower()
+        cat = m.category.lower()
+
+        if "nba-" in slug or "vs." in m.title and any(t in title for t in ["lakers","celtics","warriors","hawks","nuggets","clippers","rockets","mavericks","pelicans","grizzlies","76ers","bucks","nets","suns","kings","heat","bulls","cavs","thunder","spurs","jazz","pacers","wizards","hornets","pistons","blazers","timberwolves","raptors","magic","knicks","devils","rangers","penguins","hurricanes","senators","capitals","stars","avalanche","blues","flames"]):
+            if any(t in title for t in ["devils","rangers","penguins","hurricanes","senators","capitals","stars","avalanche","blues","flames"]):
+                return "NHL"
+            return "NBA"
+        if "ucl-" in slug or "champions league" in title: return "UCL"
+        if "premier-league" in slug or "epl" in slug: return "EPL"
+        if "laliga" in slug or "la liga" in title: return "La Liga"
+        if "cbb-" in slug or "mustangs" in title or "cardinals" in title or "hawks" in title and "march madness" in title: return "NCAAB"
+        if "nfl-" in slug: return "NFL"
+        if "nhl-" in slug: return "NHL"
+        if "mlb-" in slug: return "MLB"
+        if "lol" in slug.lower() or "lol:" in title: return "LoL"
+        if "fc " in title or "win on 2026" in title or "cf " in title or "united" in title: return "Football"
+        if "spread" in title or "o/u" in title.lower(): return "Sports"
+        if "election" in title or "president" in title or "trump" in title: return "Politics"
+        if "fed " in title or "rate" in title or "gdp" in title or "cpi" in title: return "Economics"
+        if "iran" in title or "israel" in title or "china" in title or "ukraine" in title: return "Geopolitics"
+        if "bitcoin" in title or "btc" in title or "ethereum" in title or "eth" in title: return "Crypto"
+        return "Other"
+
+    # Build events: group markets by their parent event slug
+    from collections import defaultdict
+    event_groups = defaultdict(list)
+
+    for m in markets:
+        ed = m.end_date
+        if not ed:
+            continue
+        if ed.tzinfo is None:
+            ed = ed.replace(tzinfo=timezone.utc)
+        if ed < now or ed > cutoff:
+            continue
+
+        sport_type = classify(m)
+        if sport and sport.lower() != "all" and sport_type.lower() != sport.lower():
+            continue
+
+        # Group key: event slug (from URL) or category+date
+        url_slug = m.url.split("/event/")[-1] if "/event/" in m.url else ""
+        # Strip date suffix for grouping similar events
+        group_key = re.sub(r'-\d{4}-\d{2}-\d{2}$', '', url_slug) or f"{m.category}-{ed.strftime('%Y%m%d')}"
+
+        event_groups[group_key].append({
+            "id": m.id,
+            "title": m.title,
+            "current_price": m.current_price,
+            "volume_24h": m.volume_24h,
+            "liquidity": m.liquidity,
+            "url": m.url,
+            "end_date": ed.isoformat(),
+            "sport": sport_type,
+            "category": m.category,
+        })
+
+    # Build timeline events
+    timeline = []
+    for group_key, group_markets in event_groups.items():
+        # Use earliest end_date as event time
+        sorted_by_time = sorted(group_markets, key=lambda x: x["end_date"])
+        event_time = sorted_by_time[0]["end_date"]
+        total_volume = sum(x["volume_24h"] for x in group_markets)
+        sport_type = group_markets[0]["sport"]
+
+        # Derive a clean event name from the highest-volume market
+        primary = max(group_markets, key=lambda x: x["volume_24h"])
+        event_name = primary["title"]
+        # Clean up: remove "Will X win on..." patterns
+        clean = re.sub(r"^Will\s+", "", event_name)
+        clean = re.sub(r"\s+win on \d{4}-\d{2}-\d{2}\??$", "", clean)
+        if clean == event_name:
+            clean = re.sub(r"\?$", "", event_name)
+
+        timeline.append({
+            "event_key": group_key,
+            "event_name": clean,
+            "event_time": event_time,
+            "sport": sport_type,
+            "total_volume": total_volume,
+            "market_count": len(group_markets),
+            "markets": sorted(group_markets, key=lambda x: -x["volume_24h"]),
+        })
+
+    # Sort by time
+    timeline.sort(key=lambda x: x["event_time"])
+
+    # Available sports
+    all_sports = set()
+    for m in markets:
+        s = classify(m)
+        if s != "Other":
+            all_sports.add(s)
+
+    return {
+        "events": timeline,
+        "total_events": len(timeline),
+        "sports": sorted(all_sports),
+    }
